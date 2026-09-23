@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ogórczak – Symulator Życia na Wsi</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#1a2a1a;font-family:'Nunito',system-ui,sans-serif;touch-action:none}
+#gameCanvas{display:block;width:100%;height:100%;cursor:crosshair;background:#2d4a2d}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10}
+.hud{position:absolute;backdrop-filter:blur(16px) saturate(180%);-webkit-backdrop-filter:blur(16px) saturate(180%);background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.28);border-radius:18px;box-shadow:0 8px 32px rgba(0,0,0,0.25);color:#fff;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,0.4)}
+#topHud{top:16px;left:16px;padding:12px 18px;display:flex;gap:18px;align-items:center;font-size:15px}
+.hudItem{display:flex;align-items:center;gap:7px}
+.hudIcon{width:22px;height:22px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:14px}
+#buildHint{bottom:90px;left:50%;transform:translateX(-50%);padding:10px 20px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none}
+#buildHint.show{opacity:1}
+#msgBox{top:80px;left:50%;transform:translateX(-50%);padding:12px 22px;font-size:15px;max-width:90%;text-align:center;opacity:0;transition:opacity .3s;pointer-events:none}
+#msgBox.show{opacity:1}
+#interactBtn{position:absolute;bottom:24px;right:24px;width:70px;height:70px;border-radius:50%;background:rgba(255,180,50,0.85);border:3px solid rgba(255,255,255,0.5);color:#fff;font-size:28px;font-weight:800;pointer-events:auto;cursor:pointer;display:none;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.3);transition:transform .15s}
+#interactBtn:active{transform:scale(0.92)}
+#mobileControls{position:absolute;bottom:20px;left:20px;display:none;gap:8px;pointer-events:auto}
+.mBtn{width:58px;height:58px;border-radius:14px;background:rgba(255,255,255,0.22);border:1px solid rgba(255,255,255,0.35);color:#fff;font-size:22px;font-weight:700;display:flex;align-items:center;justify-content:center;user-select:none}
+#dayNightOverlay{position:absolute;inset:0;pointer-events:none;transition:background 2s}
+#startScreen{position:fixed;inset:0;background:linear-gradient(160deg,#1e3a1e 0%,#2d5a2d 40%,#3a6b3a 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;color:#fff;text-align:center;padding:20px}
+#startScreen h1{font-size:clamp(2.2rem,8vw,4rem);font-weight:800;margin-bottom:8px;text-shadow:0 4px 20px rgba(0,0,0,0.4);letter-spacing:-1px}
+#startScreen p{font-size:1.05rem;opacity:0.9;max-width:520px;line-height:1.5;margin-bottom:28px}
+#startBtn{padding:16px 48px;font-size:1.25rem;font-weight:800;border:none;border-radius:50px;background:linear-gradient(135deg,#f5a623,#e07b00);color:#fff;cursor:pointer;box-shadow:0 8px 30px rgba(245,166,35,0.45);transition:transform .2s,box-shadow .2s;pointer-events:auto}
+#startBtn:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(245,166,35,0.55)}
+#startBtn:active{transform:translateY(0)}
+.controlsInfo{margin-top:24px;font-size:0.9rem;opacity:0.75;line-height:1.6}
+@media(max-width:800px){#mobileControls{display:flex}#topHud{font-size:13px;padding:10px 14px;gap:12px}}
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <div id="topHud" class="hud">
+    <div class="hudItem"><span class="hudIcon" style="background:#e74c3c">❤️</span><span id="hpVal">100</span></div>
+    <div class="hudItem"><span class="hudIcon" style="background:#8B4513">🪵</span><span id="woodVal">0</span></div>
+    <div class="hudItem"><span class="hudIcon" style="background:#f1c40f">🥚</span><span id="eggVal">0</span></div>
+    <div class="hudItem"><span class="hudIcon" style="background:#27ae60">🍄</span><span id="mushVal">0</span></div>
+    <div class="hudItem"><span class="hudIcon" style="background:#e67e22">🥞</span><span id="panVal">0</span></div>
+  </div>
+  <div id="buildHint" class="hud">Tryb budowania • LPM stawia płot (koszt 2 drewna) • B wyjście</div>
+  <div id="msgBox" class="hud"></div>
+  <button id="interactBtn">E</button>
+  <div id="mobileControls">
+    <div class="mBtn" id="btnUp">↑</div>
+    <div class="mBtn" id="btnLeft">←</div>
+    <div class="mBtn" id="btnDown">↓</div>
+    <div class="mBtn" id="btnRight">→</div>
+  </div>
+  <div id="dayNightOverlay"></div>
+</div>
+<div id="startScreen">
+  <h1>🥒 OGÓRCZAK</h1>
+  <p>Witaj na farmie, kurwa. Jesteś Marcinem „Ogórczakiem”. Masz farmę, kurwy kury, dzika co cię zajeżdża i Piotrka co smaży naleśniki. Zbieraj drewno, buduj zagrodę, zbieraj grzyby i nie daj się zeżreć.</p>
+  <button id="startBtn">STARTUJ GÓWNIE</button>
+  <div class="controlsInfo">
+    WASD / strzałki – ruch<br>
+    E / Spacja – zbieraj / interakcja<br>
+    B – tryb budowania płotu<br>
+    LPM – rzucaj jajami / stawiaj płot<br>
+    Kliknij na Piotrka – naleśnik
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+
+// ===================== KONFIG =====================
+const W = 3200, H = 2400;
+const TILE = 32;
+const PLAYER_SPEED = 165;
+const ACCEL = 900;
+const FRICTION = 0.86;
+const BOAR_AGGRO_R = 180;
+const BOAR_CHARGE_SPEED = 280;
+const WOOD_COST = 2;
+const EGG_STUN = 2.2;
+
+// ===================== CANVAS =====================
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d", { alpha: false });
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = "high";
+
+let CW, CH, DPR;
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  CW = window.innerWidth;
+  CH = window.innerHeight;
+  canvas.width = CW * DPR;
+  canvas.height = CH * DPR;
+  canvas.style.width = CW + "px";
+  canvas.style.height = CH + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+// ===================== AUDIO (Web Audio + cooldowns) =====================
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx = null;
+const soundCD = {};
+function ensureAudio() {
+  if (!actx) actx = new AudioCtx();
+  if (actx.state === "suspended") actx.resume();
+}
+function playTone(freq, dur, type = "sine", vol = 0.08, when = 0) {
+  if (!actx) return;
+  const t = actx.currentTime + when;
+  const o = actx.createOscillator();
+  const g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function sfx(name, fn, cd = 0.15) {
+  const now = performance.now() / 1000;
+  if (soundCD[name] && now - soundCD[name] < cd) return;
+  soundCD[name] = now;
+  ensureAudio();
+  fn();
+}
+function sfxCollect() { sfx("collect", () => { playTone(520, 0.08, "triangle", 0.07); playTone(780, 0.1, "sine", 0.05, 0.06); }); }
+function sfxBuild() { sfx("build", () => { playTone(180, 0.12, "square", 0.06); playTone(120, 0.15, "sawtooth", 0.04, 0.05); }); }
+function sfxEgg() { sfx("egg", () => playTone(400, 0.07, "sine", 0.06)); }
+function sfxHurt() { sfx("hurt", () => { playTone(120, 0.2, "sawtooth", 0.1); playTone(80, 0.25, "square", 0.07, 0.05); }); }
+function sfxPancake() { sfx("pan", () => { playTone(300, 0.1, "triangle", 0.08); playTone(450, 0.12, "sine", 0.06, 0.08); playTone(600, 0.15, "sine", 0.05, 0.16); }); }
+function sfxRooster() { sfx("rooster", () => { playTone(600, 0.15, "sawtooth", 0.09); playTone(800, 0.2, "square", 0.07, 0.12); playTone(500, 0.25, "sawtooth", 0.06, 0.28); }, 3); }
+function sfxBoar(near) {
+  sfx("boar", () => {
+    const v = near ? 0.12 : 0.04;
+    playTone(90, 0.18, "sawtooth", v);
+    playTone(70, 0.22, "square", v * 0.7, 0.08);
+  }, 4);
+}
+let ambientGain = null;
+function startAmbient() {
+  ensureAudio();
+  if (ambientGain) return;
+  ambientGain = actx.createGain();
+  ambientGain.gain.value = 0.025;
+  ambientGain.connect(actx.destination);
+  // szum lasu
+  const bufSize = actx.sampleRate * 2;
+  const buf = actx.createBuffer(1, bufSize, actx.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+  const noise = actx.createBufferSource();
+  noise.buffer = buf;
+  noise.loop = true;
+  const filter = actx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 400;
+  noise.connect(filter);
+  filter.connect(ambientGain);
+  noise.start();
+  // ptaki co jakiś czas
+  setInterval(() => {
+    if (!actx || Math.random() > 0.4) return;
+    const f = 800 + Math.random() * 1200;
+    playTone(f, 0.08, "sine", 0.03);
+    playTone(f * 1.3, 0.06, "sine", 0.025, 0.07);
+  }, 4000 + Math.random() * 5000);
+}
+
+// ===================== UTILS =====================
+const rand = (a, b) => a + Math.random() * (b - a);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const lerp = (a, b, t) => a + (b - a) * t;
+function circleRect(cx, cy, r, rx, ry, rw, rh) {
+  const nx = clamp(cx, rx, rx + rw);
+  const ny = clamp(cy, ry, ry + rh);
+  return (cx - nx) ** 2 + (cy - ny) ** 2 < r * r;
+}
+
+// ===================== WORLD DATA =====================
+const trees = [];
+const bushes = [];
+const stones = [];
+const grassClumps = [];
+const logs = [];
+const mushrooms = [];
+const fences = []; // {x,y,w,h, solid:true}
+const particles = [];
+const eggsOnGround = [];
+const thrownEggs = [];
+
+// Farma – domyślna zagroda
+const farm = {
+  houseX: 1480, houseY: 1100, houseW: 160, houseH: 120,
+  coopX: 1720, coopY: 1180, coopW: 70, coopH: 55,
+  pen: { x: 1420, y: 1280, w: 420, h: 280 }
+};
+
+// generuj domyślne płoty zagrody (zamknięte)
+function buildDefaultPen() {
+  const p = farm.pen;
+  const t = 12;
+  // górna, dolna, lewa, prawa – z bramą po lewej
+  fences.push({ x: p.x, y: p.y, w: p.w, h: t, solid: true });
+  fences.push({ x: p.x, y: p.y + p.h - t, w: p.w, h: t, solid: true });
+  fences.push({ x: p.x, y: p.y, w: t, h: 90, solid: true });
+  fences.push({ x: p.x, y: p.y + 140, w: t, h: p.h - 140, solid: true });
+  fences.push({ x: p.x + p.w - t, y: p.y, w: t, h: p.h, solid: true });
+}
+buildDefaultPen();
+
+// generuj świat
+function genWorld() {
+  // drzewa
+  for (let i = 0; i < 180; i++) {
+    let x, y, ok;
+    do {
+      x = rand(80, W - 80); y = rand(80, H - 80);
+      ok = !(x > 1350 && x < 1950 && y > 1000 && y < 1650);
+    } while (!ok);
+    trees.push({ x, y, r: rand(28, 48), h: rand(70, 120), sway: rand(0, Math.PI * 2) });
+  }
+  // krzewy
+  for (let i = 0; i < 120; i++) {
+    bushes.push({ x: rand(40, W - 40), y: rand(40, H - 40), r: rand(14, 26) });
+  }
+  // kamienie
+  for (let i = 0; i < 60; i++) {
+    stones.push({ x: rand(30, W - 30), y: rand(30, H - 30), r: rand(8, 18) });
+  }
+  // kępy trawy (gęste – do ukrycia)
+  for (let i = 0; i < 350; i++) {
+    grassClumps.push({
+      x: rand(20, W - 20), y: rand(20, H - 20),
+      dense: Math.random() < 0.18,
+      phase: rand(0, 10)
+    });
+  }
+  // kłody
+  for (let i = 0; i < 45; i++) {
+    logs.push({
+      x: rand(100, W - 100), y: rand(100, H - 100),
+      taken: false, rot: rand(0, Math.PI)
+    });
+  }
+  // grzyby
+  const types = [
+    { name: "Borowik szlachetny", edible: true, desc: "Jadalny, królewski smak! Zbieraj śmiało.", color: "#5c3317", cap: "#8B4513" },
+    { name: "Pieprznik jadalny (Kurka)", edible: true, desc: "Jadalny, pospolity i pyszny!", color: "#e67e22", cap: "#f39c12" },
+    { name: "Podgrzybek brunatny", edible: true, desc: "Jadalny, solidny borowikowy kuzyn.", color: "#6b4226", cap: "#4a3728" },
+    { name: "Muchomor czerwony", edible: false, desc: "TRUJĄCY! Nie jedz, kurwa, bo pogrzeb.", color: "#c0392b", cap: "#e74c3c" }
+  ];
+  for (let i = 0; i < 55; i++) {
+    const t = types[Math.floor(Math.random() * types.length)];
+    mushrooms.push({
+      x: rand(60, W - 60), y: rand(60, H - 60),
+      type: t, taken: false, bob: rand(0, 5)
+    });
+  }
+}
+genWorld();
+
+// ===================== ENTITIES =====================
+const player = {
+  x: 1550, y: 1200, vx: 0, vy: 0,
+  r: 16, hp: 100, maxHp: 100,
+  facing: 1, walkPhase: 0, bob: 0,
+  inv: { wood: 0, eggs: 0, mush: 0, pancakes: 0 },
+  invuln: 0, buildMode: false
+};
+
+const piotrek = {
+  x: 1600, y: 1220, vx: 0, vy: 0,
+  r: 15, state: "idle", timer: 0,
+  target: null, helpText: 0, cooking: 0,
+  facing: 1, walkPhase: 0
+};
+
+const chickens = [];
+const roosters = [];
+function spawnPoultry() {
+  for (let i = 0; i < 8; i++) {
+    chickens.push({
+      x: farm.pen.x + rand(40, farm.pen.w - 40),
+      y: farm.pen.y + rand(40, farm.pen.h - 40),
+      vx: 0, vy: 0, r: 9,
+      state: "wander", timer: rand(0, 3),
+      facing: 1, walkPhase: 0, held: false,
+      eggTimer: rand(8, 20)
+    });
+  }
+  for (let i = 0; i < 3; i++) {
+    roosters.push({
+      x: farm.pen.x + rand(50, farm.pen.w - 50),
+      y: farm.pen.y + rand(50, farm.pen.h - 50),
+      vx: 0, vy: 0, r: 11,
+      state: "wander", timer: rand(0, 4),
+      facing: 1, walkPhase: 0, crowTimer: rand(10, 30)
+    });
+  }
+}
+spawnPoultry();
+
+const boar = {
+  x: 600, y: 800, vx: 0, vy: 0, r: 22,
+  state: "forage", timer: 0, chargeCD: 0,
+  facing: 1, walkPhase: 0, dust: 0
+};
+
+// ===================== CAMERA =====================
+const cam = { x: 0, y: 0, shake: 0, bobY: 0 };
+
+// ===================== INPUT =====================
+const keys = {};
+const mouse = { x: 0, y: 0, down: false, worldX: 0, worldY: 0 };
+window.addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight","Space"].includes(e.code)) e.preventDefault();
+  if (e.code === "KeyB") toggleBuild();
+  if (e.code === "KeyE" || e.code === "Space") tryInteract();
+});
+window.addEventListener("keyup", e => { keys[e.code] = false; });
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+});
+canvas.addEventListener("mousedown", e => {
+  mouse.down = true;
+  if (player.buildMode) placeFence();
+  else throwEgg();
+});
+window.addEventListener("mouseup", () => { mouse.down = false; });
+
+// mobile
+["btnUp","btnLeft","btnDown","btnRight"].forEach(id => {
+  const el = document.getElementById(id);
+  const map = { btnUp: "ArrowUp", btnLeft: "ArrowLeft", btnDown: "ArrowDown", btnRight: "ArrowRight" };
+  el.addEventListener("touchstart", e => { e.preventDefault(); keys[map[id]] = true; });
+  el.addEventListener("touchend", e => { e.preventDefault(); keys[map[id]] = false; });
+});
+document.getElementById("interactBtn").addEventListener("click", tryInteract);
+
+// ===================== GAME STATE =====================
+let gameTime = 0; // sekundy
+let dayPhase = 0.3; // 0-1
+let weather = "sun"; // sun, rain, fog
+let weatherTimer = 0;
+let msgTimer = 0;
+let nearestMush = null;
+let heldChicken = null;
+let gameStarted = false;
+
+function showMsg(txt, t = 2.5) {
+  const box = document.getElementById("msgBox");
+  box.textContent = txt;
+  box.classList.add("show");
+  msgTimer = t;
+}
+
+function toggleBuild() {
+  player.buildMode = !player.buildMode;
+  document.getElementById("buildHint").classList.toggle("show", player.buildMode);
+  showMsg(player.buildMode ? "Tryb budowania – stawiaj płoty, debilu" : "Wyszedłeś z budowania");
+}
+
+function tryInteract() {
+  // zbieranie drewna
+  for (const l of logs) {
+    if (!l.taken && dist(player, l) < 38) {
+      l.taken = true;
+      player.inv.wood++;
+      sfxCollect();
+      showMsg("+1 drewno");
+      updateHUD();
+      return;
+    }
+  }
+  // zbieranie grzybów
+  for (const m of mushrooms) {
+    if (!m.taken && dist(player, m) < 32) {
+      m.taken = true;
+      if (m.type.edible) {
+        player.inv.mush++;
+        showMsg(`Zebrałeś: ${m.type.name}`);
+      } else {
+        player.hp = Math.max(0, player.hp - 25);
+        sfxHurt();
+        showMsg("Zjadłeś muchomora, baranie! -25 HP");
+      }
+      sfxCollect();
+      updateHUD();
+      return;
+    }
+  }
+  // jaja z ziemi
+  for (let i = eggsOnGround.length - 1; i >= 0; i--) {
+    const e = eggsOnGround[i];
+    if (dist(player, e) < 28) {
+      eggsOnGround.splice(i, 1);
+      player.inv.eggs++;
+      sfxEgg();
+      showMsg("+1 jajko");
+      updateHUD();
+      return;
+    }
+  }
+  // łapanie kury
+  if (!heldChicken) {
+    for (const c of chickens) {
+      if (!c.held && dist(player, c) < 30) {
+        c.held = true;
+        heldChicken = c;
+        showMsg("Trzymasz kurę! Podejdź do zagrody i puść (E)");
+        return;
+      }
+    }
+  } else {
+    // puszczenie kury
+    heldChicken.held = false;
+    heldChicken.x = player.x + player.facing * 25;
+    heldChicken.y = player.y;
+    heldChicken = null;
+    showMsg("Puściłeś kurę");
+    return;
+  }
+  // Piotrek – naleśnik
+  if (dist(player, piotrek) < 45) {
+    if (piotrek.cooking <= 0) {
+      piotrek.cooking = 2.5;
+      showMsg("Piotrek: Zaraz usmażę Ci naleśnika, stary!");
+    }
+  }
+}
+
+function placeFence() {
+  if (player.inv.wood < WOOD_COST) {
+    showMsg("Za mało drewna, biedaku (potrzeba 2)");
+    return;
+  }
+  const ang = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+  const fx = player.x + Math.cos(ang) * 40;
+  const fy = player.y + Math.sin(ang) * 40;
+  // orientacja
+  const horizontal = Math.abs(Math.cos(ang)) > Math.abs(Math.sin(ang));
+  const fw = horizontal ? 48 : 12;
+  const fh = horizontal ? 12 : 48;
+  fences.push({ x: fx - fw / 2, y: fy - fh / 2, w: fw, h: fh, solid: true });
+  player.inv.wood -= WOOD_COST;
+  sfxBuild();
+  updateHUD();
+}
+
+function throwEgg() {
+  if (player.inv.eggs <= 0 || player.buildMode) return;
+  player.inv.eggs--;
+  updateHUD();
+  const ang = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+  thrownEggs.push({
+    x: player.x, y: player.y,
+    vx: Math.cos(ang) * 320,
+    vy: Math.sin(ang) * 320,
+    life: 1.4
+  });
+  sfxEgg();
+}
+
+function updateHUD() {
+  document.getElementById("hpVal").textContent = Math.ceil(player.hp);
+  document.getElementById("woodVal").textContent = player.inv.wood;
+  document.getElementById("eggVal").textContent = player.inv.eggs;
+  document.getElementById("mushVal").textContent = player.inv.mush;
+  document.getElementById("panVal").textContent = player.inv.pancakes;
+}
+
+// ===================== COLLISION =====================
+function solidAt(x, y, r) {
+  // granice mapy
+  if (x - r < 0 || x + r > W || y - r < 0 || y + r > H) return true;
+  // dom
+  if (circleRect(x, y, r, farm.houseX, farm.houseY, farm.houseW, farm.houseH)) return true;
+  // kurnik
+  if (circleRect(x, y, r, farm.coopX, farm.coopY, farm.coopW, farm.coopH)) return true;
+  // płoty
+  for (const f of fences) {
+    if (f.solid && circleRect(x, y, r, f.x, f.y, f.w, f.h)) return true;
+  }
+  // duże drzewa
+  for (const t of trees) {
+    if (Math.hypot(x - t.x, y - t.y) < r + t.r * 0.35) return true;
+  }
+  return false;
+}
+
+function moveEntity(e, dt) {
+  let nx = e.x + e.vx * dt;
+  let ny = e.y + e.vy * dt;
+  if (!solidAt(nx, e.y, e.r)) e.x = nx;
+  else e.vx *= -0.3;
+  if (!solidAt(e.x, ny, e.r)) e.y = ny;
+  else e.vy *= -0.3;
+}
+
+// sprawdź czy punkt jest w zagrodzie (przybliżone AABB + płoty)
+function insidePen(x, y) {
+  const p = farm.pen;
+  return x > p.x + 8 && x < p.x + p.w - 8 && y > p.y + 8 && y < p.y + p.h - 8;
+}
+
+// ===================== UPDATE =====================
+function update(dt) {
+  gameTime += dt;
+  dayPhase = (dayPhase + dt / 480) % 1; // ~8 min cykl
+  weatherTimer -= dt;
+  if (weatherTimer <= 0) {
+    weather = ["sun", "sun", "rain", "fog"][Math.floor(Math.random() * 4)];
+    weatherTimer = rand(60, 140);
+  }
+
+  // ---- GRACZ ----
+  let ix = 0, iy = 0;
+  if (keys["KeyW"] || keys["ArrowUp"]) iy -= 1;
+  if (keys["KeyS"] || keys["ArrowDown"]) iy += 1;
+  if (keys["KeyA"] || keys["ArrowLeft"]) ix -= 1;
+  if (keys["KeyD"] || keys["ArrowRight"]) ix += 1;
+  if (ix || iy) {
+    const len = Math.hypot(ix, iy);
+    ix /= len; iy /= len;
+    player.vx += ix * ACCEL * dt;
+    player.vy += iy * ACCEL * dt;
+    player.facing = ix >= 0 ? 1 : -1;
+    player.walkPhase += dt * 10;
+  }
+  player.vx *= Math.pow(FRICTION, dt * 60);
+  player.vy *= Math.pow(FRICTION, dt * 60);
+  const sp = Math.hypot(player.vx, player.vy);
+  if (sp > PLAYER_SPEED) {
+    player.vx = (player.vx / sp) * PLAYER_SPEED;
+    player.vy = (player.vy / sp) * PLAYER_SPEED;
+  }
+  moveEntity(player, dt);
+  player.bob = Math.sin(player.walkPhase) * 2.5 * (sp / PLAYER_SPEED);
+  if (player.invuln > 0) player.invuln -= dt;
+
+  // trzymana kura
+  if (heldChicken) {
+    heldChicken.x = player.x;
+    heldChicken.y = player.y - 28;
+  }
+
+  // ---- PIOTREK ----
+  piotrek.timer -= dt;
+  if (piotrek.cooking > 0) {
+    piotrek.cooking -= dt;
+    if (piotrek.cooking <= 0) {
+      player.inv.pancakes++;
+      sfxPancake();
+      showMsg("Piotrek usmażył naleśnika! +1 🥞");
+      updateHUD();
+    }
+  } else if (piotrek.state === "idle") {
+    if (piotrek.timer <= 0) {
+      // idź pomagać albo wałęsaj się
+      if (Math.random() < 0.4 && logs.some(l => !l.taken)) {
+        const free = logs.filter(l => !l.taken);
+        piotrek.target = free[Math.floor(Math.random() * free.length)];
+        piotrek.state = "help";
+        piotrek.helpText = 3;
+      } else {
+        piotrek.target = { x: farm.houseX + rand(-80, 200), y: farm.houseY + rand(80, 200) };
+        piotrek.state = "walk";
+      }
+      piotrek.timer = rand(3, 7);
+    }
+  } else if (piotrek.state === "help" || piotrek.state === "walk") {
+    if (piotrek.target) {
+      const dx = piotrek.target.x - piotrek.x;
+      const dy = piotrek.target.y - piotrek.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 20) {
+        piotrek.vx = (dx / d) * 90;
+        piotrek.vy = (dy / d) * 90;
+        piotrek.facing = dx >= 0 ? 1 : -1;
+        piotrek.walkPhase += dt * 8;
+      } else {
+        if (piotrek.state === "help" && piotrek.target.taken === false) {
+          piotrek.target.taken = true;
+          player.inv.wood++;
+          updateHUD();
+          showMsg("Piotrek: Pomagam Ci, Marcin!");
+          sfxCollect();
+        }
+        piotrek.vx = piotrek.vy = 0;
+        piotrek.state = "idle";
+        piotrek.timer = rand(2, 5);
+      }
+    }
+  }
+  if (piotrek.helpText > 0) piotrek.helpText -= dt;
+  moveEntity(piotrek, dt);
+
+  // zjedz naleśnik automatycznie jak masz i HP niskie
+  if (player.inv.pancakes > 0 && player.hp < player.maxHp - 5) {
+    player.inv.pancakes--;
+    player.hp = Math.min(player.maxHp, player.hp + 40);
+    sfxPancake();
+    showMsg("Zjadłeś naleśnika! +40 HP");
+    updateHUD();
+  }
+
+  // ---- KURY ----
+  for (const c of chickens) {
+    if (c.held) continue;
+    c.timer -= dt;
+    c.eggTimer -= dt;
+    if (c.eggTimer <= 0 && insidePen(c.x, c.y)) {
+      eggsOnGround.push({ x: c.x + rand(-8, 8), y: c.y + rand(-8, 8) });
+      c.eggTimer = rand(12, 28);
+    }
+    if (c.state === "wander") {
+      if (c.timer <= 0) {
+        const ang = rand(0, Math.PI * 2);
+        c.vx = Math.cos(ang) * rand(20, 55);
+        c.vy = Math.sin(ang) * rand(20, 55);
+        c.timer = rand(0.8, 2.5);
+        c.facing = c.vx >= 0 ? 1 : -1;
+      }
+      c.walkPhase += dt * 6;
+    }
+    // kolizja z płotami – nie wychodzą
+    const oldX = c.x, oldY = c.y;
+    moveEntity(c, dt);
+    // dodatkowa korekta – jeśli wyszła poza pen i są płoty, wróć
+    if (!insidePen(c.x, c.y) && insidePen(oldX, oldY)) {
+      c.x = oldX; c.y = oldY;
+      c.vx *= -1; c.vy *= -1;
+    }
+  }
+
+  // ---- KOGUTY ----
+  for (const r of roosters) {
+    r.timer -= dt;
+    r.crowTimer -= dt;
+    if (r.crowTimer <= 0) {
+      if (dayPhase > 0.2 && dayPhase < 0.35) sfxRooster();
+      r.crowTimer = rand(15, 40);
+    }
+    if (r.timer <= 0) {
+      const ang = rand(0, Math.PI * 2);
+      r.vx = Math.cos(ang) * rand(25, 60);
+      r.vy = Math.sin(ang) * rand(25, 60);
+      r.timer = rand(1, 3);
+      r.facing = r.vx >= 0 ? 1 : -1;
+    }
+    r.walkPhase += dt * 7;
+    const ox = r.x, oy = r.y;
+    moveEntity(r, dt);
+    if (!insidePen(r.x, r.y) && insidePen(ox, oy)) {
+      r.x = ox; r.y = oy; r.vx *= -1; r.vy *= -1;
+    }
+  }
+
+  // ---- DZIK ----
+  boar.timer -= dt;
+  boar.chargeCD -= dt;
+  const dToPlayer = dist(boar, player);
+  const playerInGrass = grassClumps.some(g => g.dense && Math.hypot(player.x - g.x, player.y - g.y) < 28);
+
+  if (boar.state === "forage") {
+    if (dToPlayer < BOAR_AGGRO_R && !playerInGrass && boar.chargeCD <= 0) {
+      boar.state = "aggro";
+      boar.timer = 0.3;
+      sfxBoar(true);
+    } else {
+      if (boar.timer <= 0) {
+        const ang = rand(0, Math.PI * 2);
+        boar.vx = Math.cos(ang) * 35;
+        boar.vy = Math.sin(ang) * 35;
+        boar.timer = rand(1.5, 4);
+        boar.facing = boar.vx >= 0 ? 1 : -1;
+      }
+      if (dToPlayer < 400) sfxBoar(false);
+    }
+  } else if (boar.state === "aggro") {
+    if (playerInGrass) {
+      boar.state = "forage";
+      boar.timer = 2;
+      boar.chargeCD = 3;
+    } else {
+      const ang = Math.atan2(player.y - boar.y, player.x - boar.x);
+      boar.vx = Math.cos(ang) * BOAR_CHARGE_SPEED;
+      boar.vy = Math.sin(ang) * BOAR_CHARGE_SPEED;
+      boar.facing = boar.vx >= 0 ? 1 : -1;
+      boar.dust = 1;
+      if (dToPlayer < 28 && player.invuln <= 0) {
+        player.hp = Math.max(0, player.hp - 18);
+        player.invuln = 1.1;
+        cam.shake = 8;
+        sfxHurt();
+        showMsg("Dzik Cię staranował, chuja!");
+        updateHUD();
+        boar.state = "forage";
+        boar.chargeCD = 4;
+      }
+      if (dToPlayer > BOAR_AGGRO_R * 1.6) {
+        boar.state = "forage";
+        boar.chargeCD = 2;
+      }
+    }
+  }
+  boar.walkPhase += dt * (boar.state === "aggro" ? 14 : 5);
+  if (boar.dust > 0) boar.dust -= dt * 2;
+  moveEntity(boar, dt);
+
+  // ---- RZUCONE JAJA ----
+  for (let i = thrownEggs.length - 1; i >= 0; i--) {
+    const e = thrownEggs[i];
+    e.x += e.vx * dt;
+    e.y += e.vy * dt;
+    e.life -= dt;
+    e.vy += 180 * dt;
+    // trafienie dzika
+    if (dist(e, boar) < 26) {
+      boar.state = "forage";
+      boar.vx *= 0.2; boar.vy *= 0.2;
+      boar.chargeCD = EGG_STUN;
+      boar.timer = EGG_STUN;
+      showMsg("Dzik oszołomiony jajkiem!");
+      thrownEggs.splice(i, 1);
+      continue;
+    }
+    if (e.life <= 0 || solidAt(e.x, e.y, 4)) thrownEggs.splice(i, 1);
+  }
+
+  // ---- CZĄSTECZKI ----
+  // pyłek
+  if (Math.random() < 0.4) {
+    particles.push({
+      x: cam.x + rand(0, CW), y: cam.y + rand(0, CH),
+      vx: rand(-8, 8), vy: rand(-15, -5),
+      life: rand(2, 5), max: 5, r: rand(1.5, 3.5),
+      col: `hsla(${rand(40, 70)},70%,80%,0.6)`
+    });
+  }
+  // kurz dzika
+  if (boar.dust > 0 && Math.random() < 0.6) {
+    particles.push({
+      x: boar.x + rand(-10, 10), y: boar.y + 12,
+      vx: rand(-30, 30), vy: rand(-40, -10),
+      life: 0.5, max: 0.5, r: rand(3, 7),
+      col: "rgba(120,90,50,0.45)"
+    });
+  }
+  // deszcz
+  if (weather === "rain") {
+    for (let i = 0; i < 6; i++) {
+      particles.push({
+        x: cam.x + rand(0, CW), y: cam.y - 10,
+        vx: rand(-20, -5), vy: rand(280, 380),
+        life: 1.2, max: 1.2, r: 1.2,
+        col: "rgba(180,200,255,0.5)"
+      });
+    }
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // ---- KAMERA ----
+  const targetCX = player.x - CW / 2;
+  const targetCY = player.y - CH / 2 + player.bob * 0.4;
+  cam.x = lerp(cam.x, clamp(targetCX, 0, W - CW), 1 - Math.pow(0.001, dt));
+  cam.y = lerp(cam.y, clamp(targetCY, 0, H - CH), 1 - Math.pow(0.001, dt));
+  if (cam.shake > 0) {
+    cam.x += rand(-cam.shake, cam.shake);
+    cam.y += rand(-cam.shake, cam.shake);
+    cam.shake *= 0.9;
+  }
+  cam.bobY = player.bob * 0.6;
+
+  mouse.worldX = mouse.x + cam.x;
+  mouse.worldY = mouse.y + cam.y;
+
+  // grzyb info
+  nearestMush = null;
+  for (const m of mushrooms) {
+    if (!m.taken && dist(player, m) < 50) {
+      nearestMush = m;
+      break;
+    }
+  }
+
+  // msg
+  if (msgTimer > 0) {
+    msgTimer -= dt;
+    if (msgTimer <= 0) document.getElementById("msgBox").classList.remove("show");
+  }
+
+  // przycisk interakcji
+  const nearSomething = logs.some(l => !l.taken && dist(player, l) < 40) ||
+    mushrooms.some(m => !m.taken && dist(player, m) < 35) ||
+    dist(player, piotrek) < 50 ||
+    chickens.some(c => !c.held && dist(player, c) < 32) ||
+    heldChicken ||
+    eggsOnGround.some(e => dist(player, e) < 30);
+  document.getElementById("interactBtn").style.display = nearSomething ? "flex" : "none";
+
+  // dzień/noc overlay
+  const overlay = document.getElementById("dayNightOverlay");
+  let nightAlpha = 0;
+  if (dayPhase > 0.78 || dayPhase < 0.18) {
+    nightAlpha = dayPhase > 0.78 ? (dayPhase - 0.78) / 0.22 : (0.18 - dayPhase) / 0.18;
+    nightAlpha = clamp(nightAlpha, 0, 0.65);
+  }
+  if (weather === "fog") nightAlpha = Math.max(nightAlpha, 0.25);
+  overlay.style.background = `rgba(10,20,40,${nightAlpha.toFixed(3)})`;
+}
+
+// ===================== DRAW =====================
+function drawShadow(x, y, rx, ry) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 4, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawTree(t, time) {
+  const sway = Math.sin(time * 0.8 + t.sway) * 3;
+  ctx.save();
+  ctx.translate(t.x + sway, t.y);
+  // pień
+  const grad = ctx.createLinearGradient(-8, 0, 8, 0);
+  grad.addColorStop(0, "#5c3a1e");
+  grad.addColorStop(0.5, "#8B5A2B");
+  grad.addColorStop(1, "#5c3a1e");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.roundRect(-7, -t.h * 0.3, 14, t.h * 0.55, 4);
+  ctx.fill();
+  // korona – warstwy
+  ctx.shadowColor = "rgba(0,40,0,0.35)";
+  ctx.shadowBlur = 18;
+  for (let i = 0; i < 3; i++) {
+    const yy = -t.h * 0.35 - i * 18;
+    const rr = t.r * (1 - i * 0.18);
+    const g = ctx.createRadialGradient(0, yy, 0, 0, yy, rr);
+    g.addColorStop(0, i === 0 ? "#3d8c40" : "#2d6b30");
+    g.addColorStop(1, "#1a4a1c");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, yy, rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawBush(b) {
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.shadowColor = "rgba(0,30,0,0.3)";
+  ctx.shadowBlur = 10;
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, b.r);
+  g.addColorStop(0, "#4a8c3a");
+  g.addColorStop(1, "#2d5a22");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, b.r, b.r * 0.7, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+function drawPlayer() {
+  const p = player;
+  ctx.save();
+  ctx.translate(p.x, p.y + p.bob);
+  ctx.scale(p.facing, 1);
+  // cień
+  drawShadow(0, 0, 14, 6);
+  // nogi
+  const legSwing = Math.sin(p.walkPhase) * 7;
+  ctx.fillStyle = "#2d5a2d";
+  ctx.beginPath();
+  ctx.roundRect(-9, 2, 7, 14, 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(2, 2, 7, 14, 3);
+  ctx.fill();
+  // ciało – ogórek
+  const bodyG = ctx.createLinearGradient(-14, -30, 14, 20);
+  bodyG.addColorStop(0, "#6bcf4a");
+  bodyG.addColorStop(0.5, "#4caf50");
+  bodyG.addColorStop(1, "#2e7d32");
+  ctx.fillStyle = bodyG;
+  ctx.shadowColor = "rgba(0,0,0,0.25)";
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.roundRect(-13, -32, 26, 42, 10);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // dziób
+  ctx.fillStyle = "#e8a838";
+  ctx.beginPath();
+  ctx.roundRect(-11, -12, 22, 12, 4);
+  ctx.fill();
+  ctx.fillStyle = "#c4892a";
+  ctx.beginPath();
+  ctx.roundRect(-11, -2, 22, 6, 2);
+  ctx.fill();
+  // oczy
+  ctx.fillStyle = "#111";
+  ctx.fillRect(-9, -24, 6, 5);
+  ctx.fillRect(3, -24, 6, 5);
+  // język
+  ctx.fillStyle = "#e74c3c";
+  ctx.beginPath();
+  ctx.roundRect(-5, 0, 10, 11, 3);
+  ctx.fill();
+  // czułki
+  ctx.strokeStyle = "#a8e063";
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-4, -32);
+  ctx.quadraticCurveTo(-8, -48, -2, -55);
+  ctx.moveTo(4, -32);
+  ctx.quadraticCurveTo(10, -50, 5, -58);
+  ctx.stroke();
+  // ręce
+  const armSwing = Math.sin(p.walkPhase + Math.PI) * 6;
+  ctx.fillStyle = "#4caf50";
+  ctx.beginPath();
+  ctx.roundRect(-18, -18 + armSwing * 0.3, 7, 16, 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(11, -18 - armSwing * 0.3, 7, 16, 3);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHuman(e, isPiotrek) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  ctx.scale(e.facing, 1);
+  drawShadow(0, 0, 12, 5);
+  const leg = Math.sin(e.walkPhase) * 6;
+  // nogi
+  ctx.fillStyle = "#3d3d5c";
+  ctx.beginPath();
+  ctx.roundRect(-8, 0, 6, 15, 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(2, 0, 6, 15, 2);
+  ctx.fill();
+  // ciało
+  const shirt = isPiotrek ? "#3498db" : "#e67e22";
+  ctx.fillStyle = shirt;
+  ctx.shadowColor = "rgba(0,0,0,0.2)";
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.roundRect(-11, -28, 22, 30, 6);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // głowa
+  ctx.fillStyle = "#f5cba7";
+  ctx.beginPath();
+  ctx.arc(0, -36, 11, 0, Math.PI * 2);
+  ctx.fill();
+  // włosy
+  ctx.fillStyle = isPiotrek ? "#5d4037" : "#2c3e50";
+  ctx.beginPath();
+  ctx.ellipse(0, -42, 11, 7, 0, Math.PI, 0);
+  ctx.fill();
+  // oczy
+  ctx.fillStyle = "#222";
+  ctx.beginPath();
+  ctx.arc(-4, -37, 2, 0, Math.PI * 2);
+  ctx.arc(4, -37, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // ręce
+  const arm = Math.sin(e.walkPhase + 1) * 5;
+  ctx.fillStyle = "#f5cba7";
+  ctx.beginPath();
+  ctx.roundRect(-16, -22 + arm * 0.4, 6, 14, 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(10, -22 - arm * 0.4, 6, 14, 3);
+  ctx.fill();
+  // patelnia przy gotowaniu
+  if (isPiotrek && piotrek.cooking > 0) {
+    ctx.fillStyle = "#555";
+    ctx.beginPath();
+    ctx.ellipse(18, -30, 12, 5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#f39c12";
+    ctx.beginPath();
+    ctx.ellipse(18, -31, 8, 3, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+  if (isPiotrek && piotrek.helpText > 0) {
+    ctx.save();
+    ctx.font = "bold 13px Nunito";
+    ctx.fillStyle = "#fff";
+    ctx.strokeStyle = "rgba(0,0,0,0.5)";
+    ctx.lineWidth = 3;
+    const txt = "Pomagam Ci, Marcin!";
+    const tw = ctx.measureText(txt).width;
+    ctx.strokeText(txt, e.x - tw / 2, e.y - 60);
+    ctx.fillText(txt, e.x - tw / 2, e.y - 60);
+    ctx.restore();
+  }
+}
+
+function drawChicken(c, isRooster) {
+  if (c.held) return;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  ctx.scale(c.facing, 1);
+  drawShadow(0, 0, 8, 3);
+  // ciało
+  ctx.fillStyle = isRooster ? "#e8e8e8" : "#f5f5f5";
+  ctx.beginPath();
+  ctx.ellipse(0, -4, 10, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // głowa
+  ctx.beginPath();
+  ctx.arc(8, -10, 6, 0, Math.PI * 2);
+  ctx.fill();
+  // dziób
+  ctx.fillStyle = "#e67e22";
+  ctx.beginPath();
+  ctx.moveTo(13, -10);
+  ctx.lineTo(18, -8);
+  ctx.lineTo(13, -6);
+  ctx.fill();
+  // grzebień
+  ctx.fillStyle = "#c0392b";
+  ctx.beginPath();
+  ctx.moveTo(5, -15);
+  ctx.lineTo(8, -20);
+  ctx.lineTo(11, -15);
+  ctx.lineTo(14, -19);
+  ctx.lineTo(16, -14);
+  ctx.fill();
+  if (isRooster) {
+    // ogon
+    ctx.fillStyle = "#e74c3c";
+    ctx.beginPath();
+    ctx.moveTo(-8, -6);
+    ctx.quadraticCurveTo(-18, -20, -6, -16);
+    ctx.fill();
+  }
+  // oko
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(10, -11, 1.5, 0, Math.PI * 2);
+  ctx.fill();
+  // nogi
+  ctx.strokeStyle = "#e67e22";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-3, 4);
+  ctx.lineTo(-3, 10);
+  ctx.moveTo(3, 4);
+  ctx.lineTo(3, 10);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBoar() {
+  const b = boar;
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.scale(b.facing, 1);
+  drawShadow(0, 0, 18, 7);
+  // ciało
+  const g = ctx.createLinearGradient(-20, -15, 20, 10);
+  g.addColorStop(0, "#5c4030");
+  g.addColorStop(1, "#3e2a1f");
+  ctx.fillStyle = g;
+  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.ellipse(0, -6, 22, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // głowa
+  ctx.beginPath();
+  ctx.ellipse(18, -8, 12, 10, 0.2, 0, Math.PI * 2);
+  ctx.fill();
+  // kieł
+  ctx.fillStyle = "#f5f5f5";
+  ctx.beginPath();
+  ctx.moveTo(26, -4);
+  ctx.lineTo(32, 2);
+  ctx.lineTo(24, 0);
+  ctx.fill();
+  // oko
+  ctx.fillStyle = b.state === "aggro" ? "#e74c3c" : "#222";
+  ctx.beginPath();
+  ctx.arc(22, -12, 3, 0, Math.PI * 2);
+  ctx.fill();
+  // nogi
+  ctx.fillStyle = "#3e2a1f";
+  ctx.fillRect(-12, 4, 7, 10);
+  ctx.fillRect(4, 4, 7, 10);
+  ctx.restore();
+}
+
+function draw() {
+  const time = gameTime;
+  // tło – trawa z gradientem
+  const grassG = ctx.createLinearGradient(0, 0, 0, H);
+  grassG.addColorStop(0, "#4a7c3a");
+  grassG.addColorStop(1, "#3d6b32");
+  ctx.fillStyle = grassG;
+  ctx.fillRect(cam.x, cam.y, CW, CH);
+
+  // subtelny wzór trawy
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(cam.x, cam.y, CW, CH);
+  ctx.clip();
+  for (let gx = Math.floor(cam.x / 40) * 40; gx < cam.x + CW + 40; gx += 40) {
+    for (let gy = Math.floor(cam.y / 40) * 40; gy < cam.y + CH + 40; gy += 40) {
+      ctx.fillStyle = `rgba(40,80,30,${0.04 + Math.sin(gx * 0.1 + gy * 0.07) * 0.03})`;
+      ctx.fillRect(gx, gy, 38, 38);
+    }
+  }
+  ctx.restore();
+
+  // kępy trawy
+  for (const g of grassClumps) {
+    if (g.x < cam.x - 30 || g.x > cam.x + CW + 30 || g.y < cam.y - 30 || g.y > cam.y + CH + 30) continue;
+    const h = g.dense ? 14 : 8;
+    ctx.strokeStyle = g.dense ? "rgba(30,70,25,0.7)" : "rgba(50,100,40,0.45)";
+    ctx.lineWidth = g.dense ? 2.2 : 1.4;
+    ctx.beginPath();
+    ctx.moveTo(g.x, g.y);
+    ctx.quadraticCurveTo(g.x + Math.sin(time + g.phase) * 3, g.y - h, g.x + 2, g.y - h - 2);
+    ctx.stroke();
+  }
+
+  // kamienie
+  for (const s of stones) {
+    if (s.x < cam.x - 20 || s.x > cam.x + CW + 20) continue;
+    ctx.fillStyle = "#7a7a7a";
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.ellipse(s.x, s.y, s.r, s.r * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255,255,255,0.15)";
+    ctx.beginPath();
+    ctx.ellipse(s.x - s.r * 0.3, s.y - s.r * 0.2, s.r * 0.3, s.r * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // kłody
+  for (const l of logs) {
+    if (l.taken) continue;
+    if (l.x < cam.x - 40 || l.x > cam.x + CW + 40) continue;
+    ctx.save();
+    ctx.translate(l.x, l.y);
+    ctx.rotate(l.rot);
+    ctx.fillStyle = "#6d4c2e";
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.roundRect(-22, -7, 44, 14, 5);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#8B5A2B";
+    ctx.fillRect(-18, -4, 36, 3);
+    ctx.restore();
+  }
+
+  // grzyby
+  for (const m of mushrooms) {
+    if (m.taken) continue;
+    if (m.x < cam.x - 20 || m.x > cam.x + CW + 20) continue;
+    const bob = Math.sin(time * 2 + m.bob) * 1.5;
+    ctx.save();
+    ctx.translate(m.x, m.y + bob);
+    // trzon
+    ctx.fillStyle = "#f5e6c8";
+    ctx.beginPath();
+    ctx.roundRect(-3, -4, 6, 12, 2);
+    ctx.fill();
+    // kapelusz
+    ctx.fillStyle = m.type.cap;
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 11, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if (!m.type.edible) {
+      // kropki muchomora
+      ctx.fillStyle = "#fff";
+      ctx.beginPath();
+      ctx.arc(-4, -8, 2.5, 0, Math.PI * 2);
+      ctx.arc(3, -5, 2, 0, Math.PI * 2);
+      ctx.arc(0, -10, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // płoty
+  for (const f of fences) {
+    ctx.fillStyle = "#8B6914";
+    ctx.shadowColor = "rgba(0,0,0,0.3)";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.roundRect(f.x, f.y, f.w, f.h, 3);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // deski
+    ctx.strokeStyle = "rgba(0,0,0,0.2)";
+    ctx.lineWidth = 1;
+    if (f.w > f.h) {
+      for (let i = 8; i < f.w; i += 12) {
+        ctx.beginPath();
+        ctx.moveTo(f.x + i, f.y);
+        ctx.lineTo(f.x + i, f.y + f.h);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // dom
+  ctx.save();
+  ctx.translate(farm.houseX, farm.houseY);
+  // ściany
+  const hg = ctx.createLinearGradient(0, 0, 0, farm.houseH);
+  hg.addColorStop(0, "#c4a574");
+  hg.addColorStop(1, "#a08050");
+  ctx.fillStyle = hg;
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 16;
+  ctx.beginPath();
+  ctx.roundRect(0, 20, farm.houseW, farm.houseH - 20, 6);
+  ctx.fill();
+  // dach
+  ctx.fillStyle = "#8B3A2A";
+  ctx.beginPath();
+  ctx.moveTo(-10, 25);
+  ctx.lineTo(farm.houseW / 2, -25);
+  ctx.lineTo(farm.houseW + 10, 25);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  // drzwi
+  ctx.fillStyle = "#5c3a1e";
+  ctx.beginPath();
+  ctx.roundRect(farm.houseW / 2 - 16, farm.houseH - 45, 32, 45, 4);
+  ctx.fill();
+  // okno
+  ctx.fillStyle = "#87CEEB";
+  ctx.beginPath();
+  ctx.roundRect(20, 45, 28, 24, 3);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.roundRect(farm.houseW - 48, 45, 28, 24, 3);
+  ctx.fill();
+  ctx.restore();
+
+  // kurnik
+  ctx.save();
+  ctx.translate(farm.coopX, farm.coopY);
+  ctx.fillStyle = "#d4a86a";
+  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowBlur = 10;
+  ctx.beginPath();
+  ctx.roundRect(0, 10, farm.coopW, farm.coopH - 10, 4);
+  ctx.fill();
+  ctx.fillStyle = "#a0522d";
+  ctx.beginPath();
+  ctx.moveTo(-5, 12);
+  ctx.lineTo(farm.coopW / 2, -12);
+  ctx.lineTo(farm.coopW + 5, 12);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // krzewy (przed drzewami częściowo)
+  for (const b of bushes) {
+    if (b.x < cam.x - 30 || b.x > cam.x + CW + 30) continue;
+    drawBush(b);
+  }
+
+  // jaja na ziemi
+  for (const e of eggsOnGround) {
+    ctx.fillStyle = "#f5f0e0";
+    ctx.shadowColor = "rgba(0,0,0,0.2)";
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, 6, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  }
+
+  // zwierzęta
+  for (const c of chickens) drawChicken(c, false);
+  for (const r of roosters) drawChicken(r, true);
+  drawBoar();
+  drawHuman(piotrek, true);
+  drawPlayer();
+  if (heldChicken) {
+    ctx.save();
+    ctx.translate(heldChicken.x, heldChicken.y);
+    ctx.fillStyle = "#f5f5f5";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 9, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // drzewa
+  for (const t of trees) {
+    if (t.x < cam.x - 60 || t.x > cam.x + CW + 60 || t.y < cam.y - 80 || t.y > cam.y + CH + 40) continue;
+    drawTree(t, time);
+  }
+
+  // rzucone jaja
+  for (const e of thrownEggs) {
+    ctx.fillStyle = "#f5f0e0";
+    ctx.beginPath();
+    ctx.ellipse(e.x, e.y, 5, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // cząsteczki
+  for (const p of particles) {
+    ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+    ctx.fillStyle = p.col;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // info o grzybie
+  if (nearestMush) {
+    ctx.save();
+    const m = nearestMush;
+    const txt = `${m.type.name} – ${m.type.desc}`;
+    ctx.font = "bold 14px Nunito";
+    const tw = ctx.measureText(txt).width;
+    const bx = clamp(m.x - tw / 2 - 10, cam.x + 8, cam.x + CW - tw - 28);
+    const by = m.y - 48;
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by - 18, tw + 20, 28, 8);
+    ctx.fill();
+    ctx.fillStyle = m.type.edible ? "#a8e063" : "#ff6b6b";
+    ctx.fillText(txt, bx + 10, by + 2);
+    ctx.restore();
+  }
+
+  // tryb budowania – podgląd
+  if (player.buildMode) {
+    const ang = Math.atan2(mouse.worldY - player.y, mouse.worldX - player.x);
+    const fx = player.x + Math.cos(ang) * 40;
+    const fy = player.y + Math.sin(ang) * 40;
+    const horizontal = Math.abs(Math.cos(ang)) > Math.abs(Math.sin(ang));
+    const fw = horizontal ? 48 : 12;
+    const fh = horizontal ? 12 : 48;
+    ctx.fillStyle = player.inv.wood >= WOOD_COST ? "rgba(100,200,80,0.45)" : "rgba(200,60,60,0.45)";
+    ctx.beginPath();
+    ctx.roundRect(fx - fw / 2, fy - fh / 2, fw, fh, 3);
+    ctx.fill();
+  }
+
+  // mgła pogodowa
+  if (weather === "fog") {
+    ctx.fillStyle = "rgba(200,210,200,0.18)";
+    ctx.fillRect(cam.x, cam.y, CW, CH);
+  }
+}
+
+// ===================== LOOP =====================
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  if (gameStarted) {
+    update(dt);
+    ctx.save();
+    ctx.translate(-cam.x, -cam.y + cam.bobY);
+    draw();
+    ctx.restore();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// start
+document.getElementById("startBtn").addEventListener("click", () => {
+  document.getElementById("startScreen").style.display = "none";
+  gameStarted = true;
+  ensureAudio();
+  startAmbient();
+  showMsg("Witaj na farmie, Ogórczak. Nie daj się dzikowi.");
+  updateHUD();
+});
+
+})();
+</script>
+</body>
+</html>
